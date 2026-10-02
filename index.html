@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Jon &amp; Steph Pre-Wedding Travel</title>
+<title>J+S Wedding and Coordinated Travel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;800&display=swap">
@@ -96,6 +96,10 @@ button { font: inherit; cursor: pointer; }
 .edit:hover { background: var(--line-soft); color: var(--fg); }
 
 .stop { height: 30px; }
+.stops-wrap { position: relative; }
+.links { position: absolute; top: 0; left: var(--name-w); z-index: 2; pointer-events: none; overflow: visible; }
+.links path { fill: none; stroke: var(--c); stroke-width: 2; stroke-dasharray: 1 5; stroke-linecap: round; opacity: .85; }
+.links circle { fill: var(--surface); stroke: var(--c); stroke-width: 2; }
 .stop .name { padding-left: 28px; font-size: 14px; }
 .stop .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stop .name small { color: var(--muted); font-size: 11px; margin-left: auto; white-space: nowrap; }
@@ -141,7 +145,7 @@ button { font: inherit; cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field > label, .lbl { font-size: 13px; font-weight: 600; }
 .help { font-size: 12px; color: var(--muted); }
-input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+input[type="text"], input[type="date"], input[type="password"], select { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatches button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: var(--c); }
 .swatches button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--c); }
@@ -170,7 +174,7 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
 <div class="wrap">
   <header>
     <div>
-      <h1>Jon &amp; Steph Pre-Wedding Travel 2027</h1>
+      <h1>J+S Wedding and Coordinated Travel</h1>
       <p class="sub" id="sub">Wedding in Thailand on <strong>March 6</strong> <span class="star">★</span></p>
     </div>
     <button class="btn primary" id="addBtn" type="button" disabled>Add your travel</button>
@@ -213,6 +217,11 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
   <form class="modal" id="form" novalidate>
     <h3 id="formTitle">Add your travel</h3>
     <div class="field">
+      <label for="fParty">Party</label>
+      <select id="fParty"></select>
+      <span class="help">Pick your party to update it, or start a new one.</span>
+    </div>
+    <div class="field">
       <label for="fName">Who's traveling</label>
       <input id="fName" type="text" autocomplete="off" placeholder="e.g. Laura &amp; Robbie" maxlength="60">
     </div>
@@ -225,6 +234,11 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
       <span class="help">One line per place. Leave dates blank if you haven't decided yet.</span>
       <div class="stops" id="stops"></div>
       <div><button class="btn ghost" type="button" id="addStop">+ Add a stop</button></div>
+    </div>
+    <div class="field">
+      <label for="fCode">Editing passcode</label>
+      <input id="fCode" type="password" autocomplete="off" maxlength="60" placeholder="Ask Jon or Steph">
+      <span class="help">Needed to save or delete. This device remembers it after your first save.</span>
     </div>
     <p class="err" id="fErr"></p>
     <div class="modal-actions">
@@ -268,7 +282,7 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
   let sortBy = "arrive";
   let pinned = wedT, hovered = null, userPicked = false;
   let editingId = null;
-  let col = null;
+  let col = null, fsdb = null;
 
   const dated = (s) => isDate(s.start) && isDate(s.end);
   const present = (s, day) => dated(s) && toT(s.start) <= day && day <= toT(s.end);
@@ -315,9 +329,9 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
     const hl = el("div", "hl"); hl.id = "hl"; hl.hidden = true; ov.appendChild(hl);
     g.appendChild(ov);
 
-    const mkRow = (cls) => {
+    const mkRow = (cls, parent) => {
       const r = el("div", "row " + cls), n = el("div", "name"), tr = el("div", "track");
-      tr.style.width = trackW + "px"; r.append(n, tr); g.appendChild(r);
+      tr.style.width = trackW + "px"; r.append(n, tr); (parent || g).appendChild(r);
       return { r, n, tr };
     };
 
@@ -353,8 +367,10 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
       eb.addEventListener("click", () => openForm(p));
       hdr.n.append(chip, eb);
 
-      for (const s of p.stops) {
-        const r = mkRow("stop");
+      const wrap = el("div", "stops-wrap"); g.appendChild(wrap);
+      const ROW_H = 30, ends = [];
+      p.stops.forEach((s, idx) => {
+        const r = mkRow("stop", wrap);
         r.r.style.setProperty("--c", p.color);
         r.r._stop = s;
         r.n.append(el("span", null, s.place));
@@ -371,7 +387,31 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
           const lbl = el("span", "bar-lbl", `${short(a)}–${short(b)}`);
           lbl.style.left = (x + w + 6) + "px";
           r.tr.appendChild(lbl);
+          ends.push({ start: s.start, x0: x, x1: x + w, y: idx * ROW_H + ROW_H / 2 });
         }
+      });
+      // dotted connectors from the end of one stop to the start of the next
+      ends.sort((u, v) => u.start.localeCompare(v.start));
+      if (ends.length > 1) {
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(NS, "svg");
+        svg.setAttribute("class", "links"); svg.setAttribute("aria-hidden", "true");
+        svg.setAttribute("width", trackW); svg.setAttribute("height", p.stops.length * ROW_H);
+        svg.style.setProperty("--c", p.color);
+        for (let k = 1; k < ends.length; k++) {
+          const A = ends[k - 1], B = ends[k];
+          if (A.y === B.y) continue;
+          const xa = A.x1 - 4, xb = B.x0 + 4, dx = Math.max(14, Math.abs(xb - xa) / 2);
+          const path = document.createElementNS(NS, "path");
+          path.setAttribute("d", `M${xa},${A.y} C${xa + dx},${A.y} ${xb - dx},${B.y} ${xb},${B.y}`);
+          svg.appendChild(path);
+          for (const [cx, cy] of [[xa, A.y], [xb, B.y]]) {
+            const c = document.createElementNS(NS, "circle");
+            c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", 2.5);
+            svg.appendChild(c);
+          }
+        }
+        wrap.appendChild(svg);
       }
     }
 
@@ -476,7 +516,26 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
     row.querySelector(".rm").addEventListener("click", () => row.remove());
     $("stops").append(row);
   }
+  function fillParties(sel) {
+    const box = $("fParty"); box.innerHTML = "";
+    const nw = el("option", null, "+ New party"); nw.value = "__new"; box.append(nw);
+    for (const p of parties.slice().sort((a, b) => a.name.localeCompare(b.name))) {
+      const o = el("option", null, p.name); o.value = p.id; box.append(o);
+    }
+    box.value = sel || "__new";
+  }
+  $("fParty").addEventListener("change", () => {
+    const id = $("fParty").value;
+    fillForm(parties.find((x) => x.id === id) || null);
+    $("fName").focus();
+  });
   function openForm(p) {
+    fillParties(p ? p.id : null);
+    fillForm(p);
+    $("scrim").hidden = false;
+    setTimeout(() => (p ? $("fName") : $("fParty")).focus(), 0);
+  }
+  function fillForm(p) {
     editingId = p ? p.id : null;
     $("formTitle").textContent = p ? "Edit " + p.name : "Add your travel";
     $("fName").value = p ? p.name : "";
@@ -487,8 +546,18 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
     (p ? p.stops : [{ place: "Thailand", start: "2027-03-05", end: "2027-03-07" }]).forEach(addStopRow);
     $("fErr").textContent = "";
     $("fDelete").hidden = !p; disarm();
-    $("scrim").hidden = false;
-    setTimeout(() => $("fName").focus(), 0);
+    try { $("fCode").value = localStorage.getItem("editCode") || ""; } catch (_) {}
+  }
+
+  // Every write goes in a batch with a writes/{id} record carrying the passcode; the database rules check it.
+  async function guarded(ref, op) {
+    const code = $("fCode").value.trim();
+    if (!code) throw { code: "no-code" };
+    const b = fsdb.batch();
+    b.set(fsdb.collection("writes").doc(ref.id), { code, at: firebase.firestore.FieldValue.serverTimestamp() });
+    op(b);
+    await b.commit();
+    try { localStorage.setItem("editCode", code); } catch (_) {}
   }
   function closeForm() { $("scrim").hidden = true; editingId = null; }
   function disarm() { deleteArmed = false; $("fDelete").textContent = "Delete"; $("fDelete").classList.remove("confirm"); }
@@ -500,7 +569,8 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
 
   function friendly(err) {
     const c = err && err.code;
-    if (c === "permission-denied") return "That change wasn't accepted. Check the names and dates and try again.";
+    if (c === "no-code") return "Enter the editing passcode to save changes.";
+    if (c === "permission-denied") return "That passcode isn't right. Ask Jon or Steph for it.";
     if (c === "unavailable" || c === "deadline-exceeded") return "Couldn't reach the server. Check your connection and try again.";
     return "Couldn't save. Please try again.";
   }
@@ -509,6 +579,8 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
     e.preventDefault();
     const name = $("fName").value.trim();
     if (!name) return $("fErr").textContent = "Add a name so people know who's who.";
+    const dup = parties.find((x) => x.id !== editingId && x.name.toLowerCase() === name.toLowerCase());
+    if (dup) return $("fErr").textContent = `${dup.name} is already on the chart. Pick them from the Party list to update their trip.`;
     const stops = [];
     for (const row of $("stops").querySelectorAll(".stop-edit")) {
       const [pl, st, en] = row.querySelectorAll("input");
@@ -524,7 +596,8 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
     $("fSave").disabled = true;
     try {
       const data = { name, color: formColor, stops, updatedAt: new Date().toISOString() };
-      if (editingId) await col.doc(editingId).set(data); else await col.add(data);
+      const ref = editingId ? col.doc(editingId) : col.doc();
+      await guarded(ref, (b) => b.set(ref, data));
       closeForm();
     } catch (err) { $("fErr").textContent = friendly(err); }
     finally { $("fSave").disabled = false; }
@@ -532,7 +605,7 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
   $("fDelete").addEventListener("click", async () => {
     if (!deleteArmed) { deleteArmed = true; $("fDelete").textContent = "Confirm delete"; $("fDelete").classList.add("confirm"); return; }
     if (!col || !editingId) return;
-    try { await col.doc(editingId).delete(); closeForm(); } catch (err) { $("fErr").textContent = friendly(err); disarm(); }
+    try { const ref = col.doc(editingId); await guarded(ref, (b) => b.delete(ref)); closeForm(); } catch (err) { $("fErr").textContent = friendly(err); disarm(); }
   });
 
   window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 120); });
@@ -549,7 +622,8 @@ input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding
     const fail = (msg) => { loaded = true; const n = $("notice"); n.textContent = msg; n.hidden = false; render(); };
     if (!window.firebase) return fail("Couldn't load the travel database. Check your connection and reload the page.");
     firebase.initializeApp(firebaseConfig);
-    col = firebase.firestore().collection("parties");
+    fsdb = firebase.firestore();
+    col = fsdb.collection("parties");
     $("addBtn").disabled = false;
     let first = true;
     col.onSnapshot((snap) => {
