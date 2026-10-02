@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jon &amp; Steph Pre-Wedding Travel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;800&display=swap">
+<style>
+/* Layout: bold title, then one Gantt card: sticky party/stop labels on the left, a day grid on the right
+   (faint tinted track per stop + solid party-colored bar), wedding day starred, headcount strip, then "who's where" for the selected day. */
+:root {
+  --bg: #f7f6fb;
+  --surface: #ffffff;
+  --line: #e3e1ec;
+  --line-soft: #efedf5;
+  --fg: #15131c;
+  --muted: #6b6878;
+  --star: #f2b705;
+  --star-soft: rgba(242,183,5,.13);
+  --weekend: rgba(21,19,28,.028);
+  --hover: rgba(80,70,140,.08);
+  --hover-line: #8c84c4;
+  --danger: #c43c3c;
+  --btn: #15131c;
+  --on-btn: #ffffff;
+  --track-a: .14;   /* tint strength for faint tracks */
+  --font: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --day-w: 32px;
+  --name-w: 190px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121118; --surface: #1a1922; --line: #2e2c3a; --line-soft: #23212d;
+    --fg: #eceaf4; --muted: #a09cb2; --star: #f5c33b; --star-soft: rgba(245,195,59,.12);
+    --weekend: rgba(255,255,255,.025); --hover: rgba(160,150,230,.10); --hover-line: #a49ce0;
+    --danger: #ec7a7a; --btn: #eceaf4; --on-btn: #121118; --track-a: .2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121118; --surface: #1a1922; --line: #2e2c3a; --line-soft: #23212d;
+  --fg: #eceaf4; --muted: #a09cb2; --star: #f5c33b; --star-soft: rgba(245,195,59,.12);
+  --weekend: rgba(255,255,255,.025); --hover: rgba(160,150,230,.10); --hover-line: #a49ce0;
+  --danger: #ec7a7a; --btn: #eceaf4; --on-btn: #121118; --track-a: .2;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { color-scheme: light; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.5; padding: 32px 16px 56px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+h1 { font-weight: 800; font-size: clamp(28px, 5vw, 46px); line-height: 1.08; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 8px 0 0; }
+.sub strong { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.star { color: var(--star); }
+
+button { font: inherit; cursor: pointer; }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--fg); padding: 9px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--btn); border-color: var(--btn); color: var(--on-btn); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); padding-inline: 10px; }
+.btn.danger { color: var(--danger); border-color: transparent; background: transparent; padding-inline: 8px; }
+.btn.danger.confirm { background: var(--danger); color: var(--on-btn); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; font-size: 13px; font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--line-soft); color: var(--fg); }
+
+/* ---------- Gantt ---------- */
+.chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.chart-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.scroller { overflow-x: auto; overscroll-behavior-x: contain; }
+.gantt { position: relative; min-width: max-content; padding-bottom: 4px; }
+.row { display: flex; position: relative; }
+.name { position: sticky; left: 0; z-index: 3; flex: 0 0 var(--name-w); width: var(--name-w); background: var(--surface); padding: 0 10px 0 18px; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.track { position: relative; flex: 0 0 auto; z-index: 1; }
+
+.months { height: 28px; }
+.months .track > div { position: absolute; top: 0; height: 28px; display: flex; align-items: center; padding-left: 6px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; border-left: 1px solid var(--line); }
+.days { height: 46px; border-bottom: 1px solid var(--line); }
+.days .track > div { position: absolute; top: 0; width: var(--day-w); height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--muted); }
+.days .track > div b { font-size: 13px; color: var(--fg); font-weight: 600; }
+.days .track > div.wed b { color: var(--fg); font-weight: 800; }
+.days .track > div.wed i { color: var(--star); font-size: 14px; }
+.days .track > div i { font-style: normal; }
+
+.party { height: 40px; margin-top: 8px; }
+.chip { display: inline-flex; align-items: center; max-width: 100%; padding: 2px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--c) 16%, transparent); color: color-mix(in srgb, var(--c) 78%, var(--fg)); }
+.edit { flex: 0 0 auto; border: 0; background: transparent; color: var(--muted); width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; }
+.edit:hover { background: var(--line-soft); color: var(--fg); }
+
+.stop { height: 30px; }
+.stop .name { padding-left: 28px; font-size: 14px; }
+.stop .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stop .name small { color: var(--muted); font-size: 11px; margin-left: auto; white-space: nowrap; }
+.lane { position: absolute; top: 7px; height: 16px; left: 2px; right: 2px; border-radius: 999px; background: color-mix(in srgb, var(--c) calc(var(--track-a) * 100%), transparent); }
+.bar { position: absolute; top: 7px; height: 16px; border-radius: 999px; background: var(--c); transition: opacity .15s; }
+.bar-lbl { position: absolute; top: 5px; font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; transition: opacity .15s; }
+.stop.dim .bar { opacity: .25; }
+.stop.dim .bar-lbl { opacity: 0; }
+
+.count-row { height: 60px; border-top: 1px solid var(--line); margin-top: 12px; }
+.count-row .name { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.count-row .track > div { position: absolute; bottom: 6px; width: var(--day-w); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; height: 48px; }
+.count-row .track > div span { width: 16px; border-radius: 3px 3px 0 0; background: var(--line); min-height: 2px; }
+.count-row .track > div.wed span { background: var(--star); }
+.count-row .track > div b { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.count-row .track > div b.zero { color: var(--muted); font-weight: 400; }
+
+.overlay { position: absolute; top: 0; bottom: 0; left: var(--name-w); pointer-events: none; z-index: 0; }
+.overlay > div { position: absolute; top: 0; bottom: 0; width: var(--day-w); }
+.overlay .we { background: var(--weekend); }
+.overlay .wed { background: var(--star-soft); }
+.overlay .hl { background: var(--hover); box-shadow: inset 1px 0 var(--hover-line), inset -1px 0 var(--hover-line); }
+
+.empty-row { height: 90px; }
+.empty-row .track { display: flex; align-items: center; padding-left: 16px; color: var(--muted); }
+
+/* ---------- Who's where ---------- */
+.here { display: flex; flex-direction: column; gap: 10px; }
+.here h2 { font-weight: 800; font-size: 22px; letter-spacing: -.01em; margin: 0; }
+.here p.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.places { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.place { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.place h3 { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; display: flex; justify-content: space-between; }
+.place h3 span { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.place ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+
+.notice { background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 14px 16px; color: var(--muted); }
+
+/* ---------- Modal ---------- */
+.scrim { position: fixed; inset: 0; background: rgba(10,8,20,.45); display: grid; place-items: center; padding: 16px; z-index: 50; overflow-y: auto; }
+.modal { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.25); max-height: calc(100vh - 32px); overflow-y: auto; }
+.modal h3 { font-weight: 800; font-size: 22px; margin: 0; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > label, .lbl { font-size: 13px; font-weight: 600; }
+.help { font-size: 12px; color: var(--muted); }
+input[type="text"], input[type="date"] { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatches button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: var(--c); }
+.swatches button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--c); }
+.stops { display: flex; flex-direction: column; gap: 10px; }
+.stop-edit { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 32px; gap: 8px; align-items: end; }
+.stop-edit .rm { border: 0; background: transparent; color: var(--muted); height: 38px; border-radius: 8px; font-size: 18px; }
+.stop-edit .rm:hover { color: var(--danger); background: var(--line-soft); }
+.stop-edit label { font-size: 11px; color: var(--muted); font-weight: 600; }
+.err { color: var(--danger); font-size: 13px; margin: 0; min-height: 1em; }
+.modal-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.modal-actions .right { display: flex; gap: 8px; margin-left: auto; }
+
+@media (max-width: 600px) {
+  :root { --name-w: 124px; --day-w: 28px; }
+  .name { padding-left: 10px; }
+  .stop .name { padding-left: 14px; }
+  .stop .name small { display: none; }
+  .stop-edit { grid-template-columns: 1fr 1fr 32px; }
+  .stop-edit .f-place { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Jon &amp; Steph Pre-Wedding Travel 2027</h1>
+      <p class="sub" id="sub">Wedding in Thailand on <strong>March 6</strong> <span class="star">★</span></p>
+    </div>
+    <button class="btn primary" id="addBtn" type="button" disabled>Add your travel</button>
+  </header>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <section class="chart-card" aria-label="Travel timeline">
+    <div class="chart-bar">
+      <span>Tap a day to see who's where. <span class="star">★</span> = wedding day</span>
+      <div class="seg" role="group" aria-label="Sort parties">
+        <button type="button" id="sortArrive" aria-pressed="true">By arrival</button>
+        <button type="button" id="sortName" aria-pressed="false">By name</button>
+      </div>
+    </div>
+    <div class="scroller" id="scroller">
+      <div class="gantt" id="gantt"></div>
+    </div>
+  </section>
+
+  <section class="here" aria-live="polite">
+    <h2 id="hereTitle"></h2>
+    <p class="hint" id="hereHint"></p>
+    <div class="places" id="places"></div>
+  </section>
+</div>
+
+<datalist id="placeList">
+  <option value="Singapore"></option>
+  <option value="Thailand"></option>
+  <option value="Hong Kong"></option>
+  <option value="Japan"></option>
+  <option value="Vietnam"></option>
+  <option value="Bali"></option>
+  <option value="Taiwan"></option>
+  <option value="South Korea"></option>
+</datalist>
+
+<div class="scrim" id="scrim" hidden>
+  <form class="modal" id="form" novalidate>
+    <h3 id="formTitle">Add your travel</h3>
+    <div class="field">
+      <label for="fName">Who's traveling</label>
+      <input id="fName" type="text" autocomplete="off" placeholder="e.g. Laura &amp; Robbie" maxlength="60">
+    </div>
+    <div class="field">
+      <span class="lbl">Color</span>
+      <div class="swatches" id="swatches" role="group" aria-label="Party color"></div>
+    </div>
+    <div class="field">
+      <span class="lbl">Stops</span>
+      <span class="help">One line per place. Leave dates blank if you haven't decided yet.</span>
+      <div class="stops" id="stops"></div>
+      <div><button class="btn ghost" type="button" id="addStop">+ Add a stop</button></div>
+    </div>
+    <p class="err" id="fErr"></p>
+    <div class="modal-actions">
+      <button class="btn danger" type="button" id="fDelete" hidden>Delete</button>
+      <div class="right">
+        <button class="btn" type="button" id="fCancel">Cancel</button>
+        <button class="btn primary" type="submit" id="fSave">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+(() => {
+  const firebaseConfig = {
+    apiKey: "AIzaSyCMqAv_2kaKFoM_MbVY1O_8AGGZm-DC5qw",
+    authDomain: "jon-steph-wedding.firebaseapp.com",
+    projectId: "jon-steph-wedding",
+    storageBucket: "jon-steph-wedding.firebasestorage.app",
+    messagingSenderId: "1010364448757",
+    appId: "1:1010364448757:web:c21d9bed632b8f21d62abc"
+  };
+  const WEDDING = "2027-03-06";
+  const DAY = 864e5;
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const DOW = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+  const COLORS = ["#8b54f7", "#12b76a", "#1f4fe0", "#f2b705", "#f05252", "#ec4899", "#0ea5b7", "#f97316", "#64748b"];
+  const $ = (id) => document.getElementById(id);
+
+  const toT = (s) => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+  const fmt = (t) => { const d = new Date(t); return MONTHS[d.getUTCMonth()] + " " + d.getUTCDate(); };
+  const short = (t) => { const d = new Date(t); return (d.getUTCMonth() + 1) + "/" + d.getUTCDate(); };
+  const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const isColor = (s) => typeof s === "string" && /^#[0-9a-fA-F]{6}$/.test(s);
+  const wedT = toT(WEDDING);
+
+  let parties = [];   // {id, name, color, stops:[{place, start, end}]}
+  let loaded = false;
+  let sortBy = "arrive";
+  let pinned = wedT, hovered = null;
+  let editingId = null;
+  let col = null;
+
+  const dated = (s) => isDate(s.start) && isDate(s.end);
+  const present = (s, day) => dated(s) && toT(s.start) <= day && day <= toT(s.end);
+  const firstDate = (p) => p.stops.filter(dated).map((s) => s.start).sort()[0] || "9999";
+
+  const now = new Date();
+  const daysLeft = Math.round((wedT - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / DAY);
+  function updateSub() {
+    const parts = [`Wedding in Thailand on <strong>March 6</strong> <span class="star">★</span>`];
+    if (daysLeft > 0) parts.push(`<strong>${daysLeft}</strong> days to go`);
+    if (loaded && parties.length) parts.push(`<strong>${parties.length}</strong> ${parties.length === 1 ? "party" : "parties"} traveling`);
+    $("sub").innerHTML = parts.join(" · ");
+  }
+
+  function range() {
+    let lo = wedT - 5 * DAY, hi = wedT + 5 * DAY;
+    for (const p of parties) for (const s of p.stops) if (dated(s)) { lo = Math.min(lo, toT(s.start)); hi = Math.max(hi, toT(s.end)); }
+    return { start: lo - 1 * DAY, end: hi + 1 * DAY };
+  }
+  function sorted() {
+    const l = parties.slice();
+    if (sortBy === "name") l.sort((a, b) => a.name.localeCompare(b.name));
+    else l.sort((a, b) => firstDate(a).localeCompare(firstDate(b)) || a.name.localeCompare(b.name));
+    return l;
+  }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function render() {
+    updateSub();
+    const css = getComputedStyle(document.documentElement);
+    const W = parseFloat(css.getPropertyValue("--day-w")) || 32;
+    const { start, end } = range();
+    const nDays = Math.round((end - start) / DAY) + 1;
+    const trackW = nDays * W;
+    const g = $("gantt");
+    g.innerHTML = "";
+
+    const ov = el("div", "overlay"); ov.style.width = trackW + "px";
+    for (let i = 0; i < nDays; i++) {
+      const dow = new Date(start + i * DAY).getUTCDay();
+      if (dow === 0 || dow === 6) { const c = el("div", "we"); c.style.left = i * W + "px"; ov.appendChild(c); }
+    }
+    const wc = el("div", "wed"); wc.style.left = Math.round((wedT - start) / DAY) * W + "px"; ov.appendChild(wc);
+    const hl = el("div", "hl"); hl.id = "hl"; hl.hidden = true; ov.appendChild(hl);
+    g.appendChild(ov);
+
+    const mkRow = (cls) => {
+      const r = el("div", "row " + cls), n = el("div", "name"), tr = el("div", "track");
+      tr.style.width = trackW + "px"; r.append(n, tr); g.appendChild(r);
+      return { r, n, tr };
+    };
+
+    const m = mkRow("months");
+    for (let i = 0; i < nDays;) {
+      const d = new Date(start + i * DAY), mo = d.getUTCMonth();
+      let j = i; while (j < nDays && new Date(start + j * DAY).getUTCMonth() === mo) j++;
+      const lab = el("div", null, MONTHS[mo] + " " + d.getUTCFullYear());
+      lab.style.left = i * W + "px"; lab.style.width = (j - i) * W + "px";
+      if (i === 0) lab.style.borderLeft = "0";
+      m.tr.appendChild(lab); i = j;
+    }
+    const dh = mkRow("days");
+    for (let k = 0; k < nDays; k++) {
+      const t = start + k * DAY, d = new Date(t), wed = t === wedT;
+      const c = el("div", wed ? "wed" : null); c.style.left = k * W + "px";
+      c.append(el("i", null, wed ? "★" : DOW[d.getUTCDay()]), el("b", null, String(d.getUTCDate())));
+      dh.tr.appendChild(c);
+    }
+
+    const list = sorted();
+    if (!list.length) {
+      const e = mkRow("empty-row");
+      e.tr.textContent = !loaded ? "Loading travel plans…" : "No travel added yet. Use “Add your travel” to put your party on the chart.";
+    }
+    for (const p of list) {
+      const hdr = mkRow("party");
+      hdr.r.style.setProperty("--c", p.color);
+      const chip = el("span", "chip", p.name); chip.title = p.name;
+      const eb = el("button", "edit"); eb.type = "button"; eb.setAttribute("aria-label", "Edit " + p.name);
+      eb.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+      eb.addEventListener("click", () => openForm(p));
+      hdr.n.append(chip, eb);
+
+      for (const s of p.stops) {
+        const r = mkRow("stop");
+        r.r.style.setProperty("--c", p.color);
+        r.r._stop = s;
+        r.n.append(el("span", null, s.place));
+        if (!dated(s)) r.n.append(el("small", null, "dates TBD"));
+        r.tr.appendChild(el("div", "lane"));
+        if (dated(s)) {
+          const a = toT(s.start), b = toT(s.end);
+          const x = Math.round((a - start) / DAY) * W + 3;
+          const w = (Math.round((b - a) / DAY) + 1) * W - 6;
+          const bar = el("div", "bar");
+          bar.style.left = x + "px"; bar.style.width = w + "px";
+          bar.title = `${p.name} · ${s.place}: ${fmt(a)} – ${fmt(b)}`;
+          r.tr.appendChild(bar);
+          const lbl = el("span", "bar-lbl", `${short(a)}–${short(b)}`);
+          lbl.style.left = (x + w + 6) + "px";
+          r.tr.appendChild(lbl);
+        }
+      }
+    }
+
+    const cr = mkRow("count-row");
+    cr.n.textContent = "In Thailand";
+    const counts = [];
+    for (let k = 0; k < nDays; k++) {
+      const day = start + k * DAY;
+      counts.push(parties.filter((p) => p.stops.some((s) => /thai/i.test(s.place) && present(s, day))).length);
+    }
+    const max = Math.max(1, ...counts);
+    counts.forEach((n, k) => {
+      const c = el("div", start + k * DAY === wedT ? "wed" : null); c.style.left = k * W + "px";
+      const s = el("span"); s.style.height = Math.round((n / max) * 28) + "px";
+      c.append(s, el("b", n ? null : "zero", String(n)));
+      cr.tr.appendChild(c);
+    });
+
+    g._meta = { start, nDays, W };
+    applyFocus();
+  }
+
+  function applyFocus() {
+    const meta = $("gantt")._meta; if (!meta) return;
+    const day = hovered ?? pinned;
+    const hl = $("hl"), k = Math.round((day - meta.start) / DAY);
+    hl.hidden = !(k >= 0 && k < meta.nDays);
+    hl.style.left = k * meta.W + "px";
+    document.querySelectorAll("#gantt .stop").forEach((r) => r.classList.toggle("dim", !!r._stop && dated(r._stop) && !present(r._stop, day)));
+
+    // who's where
+    const byPlace = new Map();
+    for (const p of sorted()) for (const s of p.stops) if (present(s, day)) {
+      if (!byPlace.has(s.place)) byPlace.set(s.place, []);
+      if (!byPlace.get(s.place).includes(p)) byPlace.get(s.place).push(p);
+    }
+    const places = [...byPlace.entries()].sort((a, b) => (/thai/i.test(b[0]) - /thai/i.test(a[0])) || b[1].length - a[1].length);
+    $("hereTitle").textContent = (day === wedT ? "★ Wedding day, " : "") + fmt(day) + ": who's where";
+    $("hereHint").textContent = places.length ? "Hover or tap another day on the chart to change it." : "Nobody has a stop on this day yet.";
+    const box = $("places"); box.innerHTML = "";
+    for (const [place, ps] of places) {
+      const card = el("div", "place");
+      const h = el("h3", null, place); h.append(el("span", null, String(ps.length)));
+      const ul = el("ul");
+      for (const p of ps) { const li = el("li"); const c = el("span", "chip", p.name); c.style.setProperty("--c", p.color); li.append(c); ul.append(li); }
+      card.append(h, ul); box.append(card);
+    }
+  }
+
+  function dayFromEvent(e) {
+    const meta = $("gantt")._meta, tr = $("gantt").querySelector(".row .track");
+    if (!meta || !tr) return null;
+    const k = Math.floor((e.clientX - tr.getBoundingClientRect().left) / meta.W);
+    return k >= 0 && k < meta.nDays ? meta.start + k * DAY : null;
+  }
+  const gantt = $("gantt");
+  gantt.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const d = e.target.closest(".name") ? null : dayFromEvent(e);
+    if (d !== hovered) { hovered = d; applyFocus(); }
+  });
+  gantt.addEventListener("pointerleave", () => { if (hovered != null) { hovered = null; applyFocus(); } });
+  gantt.addEventListener("click", (e) => {
+    if (e.target.closest(".name")) return;
+    const d = dayFromEvent(e);
+    if (d != null) { pinned = d; hovered = null; applyFocus(); }
+  });
+
+  function setSort(s, quiet) {
+    sortBy = s;
+    $("sortArrive").setAttribute("aria-pressed", String(s === "arrive"));
+    $("sortName").setAttribute("aria-pressed", String(s === "name"));
+    if (!quiet) { try { localStorage.setItem("sortBy", s); } catch (_) {} render(); }
+  }
+  $("sortArrive").addEventListener("click", () => setSort("arrive"));
+  $("sortName").addEventListener("click", () => setSort("name"));
+  try { if (localStorage.getItem("sortBy") === "name") setSort("name", true); } catch (_) {}
+
+  // ---------- form ----------
+  let formColor = COLORS[0], deleteArmed = false, stopSeq = 0;
+  function renderSwatches() {
+    const box = $("swatches"); box.innerHTML = "";
+    COLORS.forEach((c, i) => {
+      const b = el("button"); b.type = "button"; b.style.setProperty("--c", c);
+      b.setAttribute("aria-label", "Color " + (i + 1)); b.setAttribute("aria-pressed", String(c === formColor));
+      b.addEventListener("click", () => { formColor = c; renderSwatches(); });
+      box.append(b);
+    });
+  }
+  function addStopRow(s) {
+    const i = ++stopSeq;
+    const row = el("div", "stop-edit");
+    row.innerHTML =
+      `<div class="field f-place"><label for="sp${i}">Place</label><input type="text" id="sp${i}" list="placeList" maxlength="40" placeholder="e.g. Thailand"></div>` +
+      `<div class="field"><label for="ss${i}">From</label><input type="date" id="ss${i}"></div>` +
+      `<div class="field"><label for="se${i}">To</label><input type="date" id="se${i}"></div>` +
+      `<button type="button" class="rm" aria-label="Remove stop">×</button>`;
+    row.querySelector(`#sp${i}`).value = s.place || "";
+    row.querySelector(`#ss${i}`).value = s.start || "";
+    row.querySelector(`#se${i}`).value = s.end || "";
+    row.querySelector(".rm").addEventListener("click", () => row.remove());
+    $("stops").append(row);
+  }
+  function openForm(p) {
+    editingId = p ? p.id : null;
+    $("formTitle").textContent = p ? "Edit " + p.name : "Add your travel";
+    $("fName").value = p ? p.name : "";
+    const used = new Set(parties.map((x) => x.color));
+    formColor = p ? p.color : (COLORS.find((c) => !used.has(c)) || COLORS[0]);
+    renderSwatches();
+    $("stops").innerHTML = "";
+    (p ? p.stops : [{ place: "Thailand", start: "2027-03-05", end: "2027-03-07" }]).forEach(addStopRow);
+    $("fErr").textContent = "";
+    $("fDelete").hidden = !p; disarm();
+    $("scrim").hidden = false;
+    setTimeout(() => $("fName").focus(), 0);
+  }
+  function closeForm() { $("scrim").hidden = true; editingId = null; }
+  function disarm() { deleteArmed = false; $("fDelete").textContent = "Delete"; $("fDelete").classList.remove("confirm"); }
+  $("addStop").addEventListener("click", () => addStopRow({}));
+  $("fCancel").addEventListener("click", closeForm);
+  $("scrim").addEventListener("click", (e) => { if (e.target === $("scrim")) closeForm(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("scrim").hidden) closeForm(); });
+  $("addBtn").addEventListener("click", () => openForm(null));
+
+  function friendly(err) {
+    const c = err && err.code;
+    if (c === "permission-denied") return "That change wasn't accepted. Check the names and dates and try again.";
+    if (c === "unavailable" || c === "deadline-exceeded") return "Couldn't reach the server. Check your connection and try again.";
+    return "Couldn't save. Please try again.";
+  }
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("fName").value.trim();
+    if (!name) return $("fErr").textContent = "Add a name so people know who's who.";
+    const stops = [];
+    for (const row of $("stops").querySelectorAll(".stop-edit")) {
+      const [pl, st, en] = row.querySelectorAll("input");
+      const place = pl.value.trim(), start = st.value, end = en.value;
+      if (!place && !start && !end) continue;
+      if (!place) return $("fErr").textContent = "Each stop needs a place.";
+      if ((start && !end) || (!start && end)) return $("fErr").textContent = `Add both dates for ${place}, or leave both blank.`;
+      if (start && end < start) return $("fErr").textContent = `The dates for ${place} end before they start.`;
+      stops.push({ place, start, end });
+    }
+    if (!stops.length) return $("fErr").textContent = "Add at least one stop.";
+    if (!col) return;
+    $("fSave").disabled = true;
+    try {
+      const data = { name, color: formColor, stops, updatedAt: new Date().toISOString() };
+      if (editingId) await col.doc(editingId).set(data); else await col.add(data);
+      closeForm();
+    } catch (err) { $("fErr").textContent = friendly(err); }
+    finally { $("fSave").disabled = false; }
+  });
+  $("fDelete").addEventListener("click", async () => {
+    if (!deleteArmed) { deleteArmed = true; $("fDelete").textContent = "Confirm delete"; $("fDelete").classList.add("confirm"); return; }
+    if (!col || !editingId) return;
+    try { await col.doc(editingId).delete(); closeForm(); } catch (err) { $("fErr").textContent = friendly(err); disarm(); }
+  });
+
+  window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 120); });
+
+  function centerWedding() {
+    const meta = $("gantt")._meta, sc = $("scroller"); if (!meta) return;
+    const nameW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--name-w")) || 0;
+    const x = ((wedT - meta.start) / DAY) * meta.W;
+    if (sc.scrollWidth > sc.clientWidth) sc.scrollLeft = Math.max(0, x - (sc.clientWidth - nameW) / 2);
+  }
+  render(); centerWedding();
+
+  (() => {
+    const fail = (msg) => { loaded = true; const n = $("notice"); n.textContent = msg; n.hidden = false; render(); };
+    if (!window.firebase) return fail("Couldn't load the travel database. Check your connection and reload the page.");
+    firebase.initializeApp(firebaseConfig);
+    col = firebase.firestore().collection("parties");
+    $("addBtn").disabled = false;
+    let first = true;
+    col.onSnapshot((snap) => {
+      parties = snap.docs.map((d) => {
+        const v = d.data() || {};
+        const stops = (Array.isArray(v.stops) ? v.stops : [])
+          .filter((s) => s && typeof s.place === "string" && s.place.trim())
+          .map((s) => {
+            const ok = isDate(s.start) && isDate(s.end) && s.end >= s.start;
+            return { place: s.place.trim().slice(0, 40), start: ok ? s.start : "", end: ok ? s.end : "" };
+          });
+        return { id: d.id, name: typeof v.name === "string" ? v.name.trim().slice(0, 60) : "", color: isColor(v.color) ? v.color : COLORS[8], stops };
+      }).filter((p) => p.name && p.stops.length);
+      loaded = true; render();
+      if (first) { first = false; centerWedding(); }
+    }, (err) => fail(err && err.code === "permission-denied"
+      ? "The travel database isn't accepting requests yet. Jon or Steph need to finish setting it up."
+      : "Couldn't load travel plans. Reload the page to try again."));
+  })();
+})();
+</script>
+</body>
+</html>
