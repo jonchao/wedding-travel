@@ -75,6 +75,11 @@ button { font: inherit; cursor: pointer; }
 /* ---------- Gantt ---------- */
 .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .chart-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.flabel { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.fchip { border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 999px; padding: 3px 11px; font-size: 13px; font-weight: 600; background: color-mix(in srgb, var(--c) 16%, transparent); color: color-mix(in srgb, var(--c) 78%, var(--fg)); }
+.fchip[aria-pressed="false"] { background: transparent; border-style: dashed; border-color: var(--line); color: var(--muted); text-decoration: line-through; }
+.fall { font-size: 13px; padding: 3px 10px; }
 .scroller { overflow-x: auto; overscroll-behavior-x: contain; }
 .gantt { position: relative; min-width: max-content; padding-bottom: 4px; }
 .row { display: flex; position: relative; }
@@ -191,6 +196,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
         <button type="button" id="sortName" aria-pressed="false">By name</button>
       </div>
     </div>
+    <div class="filters" id="filters" role="group" aria-label="Show or hide parties" hidden></div>
     <div class="scroller" id="scroller">
       <div class="gantt" id="gantt"></div>
     </div>
@@ -255,6 +261,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     appId: "1:1010364448757:web:c21d9bed632b8f21d62abc"
   };
   const WEDDING = "2027-03-06";
+  const VIEW_START = "2027-02-22", VIEW_END = "2027-03-30";  // last week of Feb through end of March
   const DAY = 864e5;
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const DOW = ["Su","Mo","Tu","We","Th","Fr","Sa"];
@@ -273,6 +280,27 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   let parties = [];   // {id, name, color, stops:[{place, start, end}]}
   let loaded = false;
   let sortBy = "arrive";
+  let hiddenIds = new Set();
+  try { hiddenIds = new Set(JSON.parse(localStorage.getItem("hiddenParties") || "[]")); } catch (_) {}
+  const visible = () => parties.filter((p) => !hiddenIds.has(p.id));
+  function saveHidden() { try { localStorage.setItem("hiddenParties", JSON.stringify([...hiddenIds])); } catch (_) {} }
+  function renderFilters() {
+    const box = $("filters"); box.innerHTML = "";
+    box.hidden = !parties.length;
+    box.append(el("span", "flabel", "Show"));
+    for (const p of parties.slice().sort((a, b) => a.name.localeCompare(b.name))) {
+      const on = !hiddenIds.has(p.id);
+      const b = el("button", "fchip", p.name); b.type = "button";
+      b.style.setProperty("--c", p.color); b.setAttribute("aria-pressed", String(on));
+      b.title = (on ? "Hide " : "Show ") + p.name;
+      b.addEventListener("click", () => { on ? hiddenIds.add(p.id) : hiddenIds.delete(p.id); saveHidden(); render(); });
+      box.append(b);
+    }
+    const anyHidden = parties.some((p) => hiddenIds.has(p.id));
+    const t = el("button", "btn ghost fall", anyHidden ? "Show all" : "Hide all"); t.type = "button";
+    t.addEventListener("click", () => { hiddenIds = anyHidden ? new Set() : new Set(parties.map((p) => p.id)); saveHidden(); render(); });
+    box.append(t);
+  }
   let pinned = wedT, hovered = null, userPicked = false;
   let editingId = null;
   let col = null, fsdb = null;
@@ -291,12 +319,12 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   }
 
   function range() {
-    let lo = wedT - 5 * DAY, hi = wedT + 5 * DAY;
-    for (const p of parties) for (const s of p.stops) if (dated(s)) { lo = Math.min(lo, toT(s.start)); hi = Math.max(hi, toT(s.end)); }
-    return { start: lo - 1 * DAY, end: hi + 1 * DAY };
+    let lo = toT(VIEW_START), hi = toT(VIEW_END);
+    for (const p of visible()) for (const s of p.stops) if (dated(s)) { lo = Math.min(lo, toT(s.start) - DAY); hi = Math.max(hi, toT(s.end) + DAY); }
+    return { start: lo, end: hi };
   }
   function sorted() {
-    const l = parties.slice();
+    const l = visible();
     if (sortBy === "name") l.sort((a, b) => a.name.localeCompare(b.name));
     else l.sort((a, b) => firstDate(a).localeCompare(firstDate(b)) || a.name.localeCompare(b.name));
     return l;
@@ -305,6 +333,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
 
   function render() {
     updateSub();
+    renderFilters();
     const css = getComputedStyle(document.documentElement);
     const W = parseFloat(css.getPropertyValue("--day-w")) || 32;
     const { start, end } = range();
@@ -349,7 +378,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     const list = sorted();
     if (!list.length) {
       const e = mkRow("empty-row");
-      e.tr.textContent = !loaded ? "Loading travel plans…" : "No travel added yet. Use “Add your travel” to put your party on the chart.";
+      e.tr.textContent = !loaded ? "Loading travel plans…" : parties.length ? "All parties are hidden. Turn them back on with the buttons above." : "No travel added yet. Use “Add your travel” to put your party on the chart.";
     }
     for (const p of list) {
       const hdr = mkRow("party");
@@ -421,7 +450,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     const counts = [];
     for (let k = 0; k < nDays; k++) {
       const day = start + k * DAY;
-      counts.push(parties.filter((p) => p.stops.some((s) => /thai/i.test(s.place) && present(s, day))).length);
+      counts.push(visible().filter((p) => p.stops.some((s) => /thai/i.test(s.place) && present(s, day))).length);
     }
     const max = Math.max(1, ...counts);
     counts.forEach((n, k) => {
