@@ -401,9 +401,17 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
         for (let k = 1; k < ends.length; k++) {
           const A = ends[k - 1], B = ends[k];
           if (A.y === B.y) continue;
-          const xa = A.x1 - 4, xb = B.x0 + 4, dx = Math.max(14, Math.abs(xb - xa) / 2);
+          let xa = A.x1 - 4, xb = B.x0 + 4, d;
+          if (B.x0 < A.x1) {
+            // dates overlap (e.g. fly out the same day): straight vertical line through the shared days
+            xa = xb = Math.round((Math.max(A.x0, B.x0) + Math.min(A.x1, B.x1)) / 2);
+            d = `M${xa},${A.y} V${B.y}`;
+          } else {
+            const dx = Math.max(6, (xb - xa) / 2);
+            d = `M${xa},${A.y} C${xa + dx},${A.y} ${xb - dx},${B.y} ${xb},${B.y}`;
+          }
           const path = document.createElementNS(NS, "path");
-          path.setAttribute("d", `M${xa},${A.y} C${xa + dx},${A.y} ${xb - dx},${B.y} ${xb},${B.y}`);
+          path.setAttribute("d", d);
           svg.appendChild(path);
           for (const [cx, cy] of [[xa, A.y], [xb, B.y]]) {
             const c = document.createElementNS(NS, "circle");
