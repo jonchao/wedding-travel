@@ -149,6 +149,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatches button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: var(--c); }
 .swatches button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--c); }
+.swatches button:disabled { opacity: .2; cursor: not-allowed; }
 .stops { display: flex; flex-direction: column; gap: 10px; }
 .stop-edit { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 32px; gap: 8px; align-items: end; }
 .stop-edit .rm { border: 0; background: transparent; color: var(--muted); height: 38px; border-radius: 8px; font-size: 18px; }
@@ -202,17 +203,6 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   </section>
 </div>
 
-<datalist id="placeList">
-  <option value="Singapore"></option>
-  <option value="Thailand"></option>
-  <option value="Hong Kong"></option>
-  <option value="Japan"></option>
-  <option value="Vietnam"></option>
-  <option value="Bali"></option>
-  <option value="Taiwan"></option>
-  <option value="South Korea"></option>
-</datalist>
-
 <div class="scrim" id="scrim" hidden>
   <form class="modal" id="form" novalidate>
     <h3 id="formTitle">Add your travel</h3>
@@ -221,12 +211,13 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
       <select id="fParty"></select>
       <span class="help">Pick your party to update it, or start a new one.</span>
     </div>
-    <div class="field">
+    <div class="field" id="nameField">
       <label for="fName">Who's traveling</label>
       <input id="fName" type="text" autocomplete="off" placeholder="e.g. Laura &amp; Robbie" maxlength="60">
     </div>
-    <div class="field">
+    <div class="field" id="colorField">
       <span class="lbl">Color</span>
+      <span class="help">Colors already used by another party are greyed out.</span>
       <div class="swatches" id="swatches" role="group" aria-label="Party color"></div>
     </div>
     <div class="field">
@@ -268,6 +259,8 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const DOW = ["Su","Mo","Tu","We","Th","Fr","Sa"];
   const COLORS = ["#8b54f7", "#12b76a", "#1f4fe0", "#f2b705", "#f05252", "#ec4899", "#0ea5b7", "#f97316", "#64748b"];
+  const COUNTRIES = ["Thailand", "Singapore", "Hong Kong", "Japan", "South Korea", "Taiwan", "Vietnam", "Cambodia", "Laos",
+    "Malaysia", "Indonesia", "Philippines", "China", "Macau", "India", "Sri Lanka", "Maldives", "Nepal", "Australia", "New Zealand"];
   const $ = (id) => document.getElementById(id);
 
   const toT = (s) => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d); };
@@ -503,8 +496,11 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   let formColor = COLORS[0], deleteArmed = false, stopSeq = 0;
   function renderSwatches() {
     const box = $("swatches"); box.innerHTML = "";
+    const taken = new Set(parties.map((x) => x.color));
+    const allTaken = COLORS.every((c) => taken.has(c));
     COLORS.forEach((c, i) => {
       const b = el("button"); b.type = "button"; b.style.setProperty("--c", c);
+      if (!allTaken && taken.has(c)) { b.disabled = true; b.title = "Already used by another party"; }
       b.setAttribute("aria-label", "Color " + (i + 1)); b.setAttribute("aria-pressed", String(c === formColor));
       b.addEventListener("click", () => { formColor = c; renderSwatches(); });
       box.append(b);
@@ -514,11 +510,16 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     const i = ++stopSeq;
     const row = el("div", "stop-edit");
     row.innerHTML =
-      `<div class="field f-place"><label for="sp${i}">Place</label><input type="text" id="sp${i}" list="placeList" maxlength="40" placeholder="e.g. Thailand"></div>` +
+      `<div class="field f-place"><label for="sp${i}">Country</label><select id="sp${i}"></select></div>` +
       `<div class="field"><label for="ss${i}">From</label><input type="date" id="ss${i}"></div>` +
       `<div class="field"><label for="se${i}">To</label><input type="date" id="se${i}"></div>` +
       `<button type="button" class="rm" aria-label="Remove stop">×</button>`;
-    row.querySelector(`#sp${i}`).value = s.place || "";
+    const sel = row.querySelector(`#sp${i}`);
+    const extra = parties.flatMap((p) => p.stops.map((x) => x.place)).concat(s.place ? [s.place] : []);
+    const opts = [...new Set(COUNTRIES.concat(extra))];
+    const ph = el("option", null, "Choose a country"); ph.value = ""; sel.append(ph);
+    for (const c of opts) { const o = el("option", null, c); o.value = c; sel.append(o); }
+    sel.value = s.place || "";
     row.querySelector(`#ss${i}`).value = s.start || "";
     row.querySelector(`#se${i}`).value = s.end || "";
     row.querySelector(".rm").addEventListener("click", () => row.remove());
@@ -534,22 +535,25 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   }
   $("fParty").addEventListener("change", () => {
     const id = $("fParty").value;
-    fillForm(parties.find((x) => x.id === id) || null);
-    $("fName").focus();
+    const p = parties.find((x) => x.id === id) || null;
+    fillForm(p);
+    if (!p) $("fName").focus();
   });
   function openForm(p) {
     fillParties(p ? p.id : null);
     fillForm(p);
     $("scrim").hidden = false;
-    setTimeout(() => (p ? $("fName") : $("fParty")).focus(), 0);
+    setTimeout(() => $("fParty").focus(), 0);
   }
   function fillForm(p) {
     editingId = p ? p.id : null;
     $("formTitle").textContent = p ? "Edit " + p.name : "Add your travel";
     $("fName").value = p ? p.name : "";
+    $("nameField").hidden = !!p;
+    $("colorField").hidden = !!p;
     const used = new Set(parties.map((x) => x.color));
     formColor = p ? p.color : (COLORS.find((c) => !used.has(c)) || COLORS[0]);
-    renderSwatches();
+    if (!p) renderSwatches();
     $("stops").innerHTML = "";
     (p ? p.stops : [{ place: "Thailand", start: "2027-03-05", end: "2027-03-07" }]).forEach(addStopRow);
     $("fErr").textContent = "";
@@ -585,16 +589,18 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
 
   $("form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const name = $("fName").value.trim();
+    const existing = editingId ? parties.find((x) => x.id === editingId) : null;
+    const name = existing ? existing.name : $("fName").value.trim();
+    const color = existing ? existing.color : formColor;
     if (!name) return $("fErr").textContent = "Add a name so people know who's who.";
-    const dup = parties.find((x) => x.id !== editingId && x.name.toLowerCase() === name.toLowerCase());
+    const dup = !existing && parties.find((x) => x.name.toLowerCase() === name.toLowerCase());
     if (dup) return $("fErr").textContent = `${dup.name} is already on the chart. Pick them from the Party list to update their trip.`;
     const stops = [];
     for (const row of $("stops").querySelectorAll(".stop-edit")) {
-      const [pl, st, en] = row.querySelectorAll("input");
+      const pl = row.querySelector("select"), [st, en] = row.querySelectorAll("input");
       const place = pl.value.trim(), start = st.value, end = en.value;
       if (!place && !start && !end) continue;
-      if (!place) return $("fErr").textContent = "Each stop needs a place.";
+      if (!place) return $("fErr").textContent = "Choose a country for each stop.";
       if ((start && !end) || (!start && end)) return $("fErr").textContent = `Add both dates for ${place}, or leave both blank.`;
       if (start && end < start) return $("fErr").textContent = `The dates for ${place} end before they start.`;
       stops.push({ place, start, end });
@@ -603,7 +609,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     if (!col) return;
     $("fSave").disabled = true;
     try {
-      const data = { name, color: formColor, stops, updatedAt: new Date().toISOString() };
+      const data = { name, color, stops, updatedAt: new Date().toISOString() };
       const ref = editingId ? col.doc(editingId) : col.doc();
       await guarded(ref, (b) => b.set(ref, data));
       closeForm();
