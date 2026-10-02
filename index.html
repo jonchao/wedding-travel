@@ -19,6 +19,8 @@
   --muted: #6b6878;
   --star: #f2b705;
   --star-soft: rgba(242,183,5,.13);
+  --welcome: #d6457f;
+  --welcome-soft: rgba(214,69,127,.08);
   --weekend: rgba(21,19,28,.028);
   --hover: rgba(80,70,140,.08);
   --hover-line: #8c84c4;
@@ -33,7 +35,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #121118; --surface: #1a1922; --line: #2e2c3a; --line-soft: #23212d;
-    --fg: #eceaf4; --muted: #a09cb2; --star: #f5c33b; --star-soft: rgba(245,195,59,.12);
+    --fg: #eceaf4; --muted: #a09cb2; --star: #f5c33b; --star-soft: rgba(245,195,59,.12); --welcome: #f07aa8; --welcome-soft: rgba(240,122,168,.09);
     --weekend: rgba(255,255,255,.025); --hover: rgba(160,150,230,.10); --hover-line: #a49ce0;
     --danger: #ec7a7a; --btn: #eceaf4; --on-btn: #121118; --track-a: .2;
     color-scheme: dark;
@@ -41,7 +43,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #121118; --surface: #1a1922; --line: #2e2c3a; --line-soft: #23212d;
-  --fg: #eceaf4; --muted: #a09cb2; --star: #f5c33b; --star-soft: rgba(245,195,59,.12);
+  --fg: #eceaf4; --muted: #a09cb2; --star: #f5c33b; --star-soft: rgba(245,195,59,.12); --welcome: #f07aa8; --welcome-soft: rgba(240,122,168,.09);
   --weekend: rgba(255,255,255,.025); --hover: rgba(160,150,230,.10); --hover-line: #a49ce0;
   --danger: #ec7a7a; --btn: #eceaf4; --on-btn: #121118; --track-a: .2;
   color-scheme: dark;
@@ -93,6 +95,10 @@ button { font: inherit; cursor: pointer; }
 .days .track > div b { font-size: 13px; color: var(--fg); font-weight: 600; }
 .days .track > div.wed b { color: var(--fg); font-weight: 800; }
 .days .track > div.wed i { color: var(--star); font-size: 14px; }
+.days .track > div.wel i { color: var(--welcome); font-size: 14px; }
+.days .track > div.wel b { font-weight: 800; }
+.overlay .wel { background: var(--welcome-soft); }
+.welcome { color: var(--welcome); }
 .days .track > div i { font-style: normal; }
 
 .party { height: 40px; margin-top: 8px; }
@@ -165,7 +171,22 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
 .modal-actions .right { display: flex; gap: 8px; margin-left: auto; }
 
 @media (max-width: 600px) {
-  :root { --name-w: 124px; --day-w: 28px; }
+  :root { --name-w: 118px; --day-w: 30px; }
+  body { padding-block: 20px 40px; }
+  header { align-items: stretch; }
+  header > div:first-child { flex: 1 1 100%; }
+  #addBtn { flex: 1; }
+  .hdr-actions { flex: 1 1 100%; }
+  input[type="text"], input[type="date"], input[type="password"], select { font-size: 16px; }  /* stops iOS zooming on focus */
+  .chart-bar { padding: 10px 12px; }
+  .filters { padding: 8px 12px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .filters > * { flex: 0 0 auto; }
+  .chip { font-size: 13px; padding: 2px 8px; }
+  .stop .name { font-size: 13px; }
+  .edit { width: 34px; height: 34px; }
+  .scrim { padding: 0; place-items: end stretch; }
+  .modal { width: 100%; border-radius: 16px 16px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); max-height: 92vh; }
+  .places { grid-template-columns: minmax(0, 1fr); }
   .name { padding-left: 10px; }
   .stop .name { padding-left: 14px; }
   .stop .name small { display: none; }
@@ -190,7 +211,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
 
   <section class="chart-card" aria-label="Travel timeline">
     <div class="chart-bar">
-      <span>Tap a day to see who's where. <span class="star">★</span> = wedding day</span>
+      <span>Tap a day to see who's where. <span class="star">★</span> wedding day · <span class="welcome">✦</span> welcome party</span>
       <div class="seg" role="group" aria-label="Sort parties">
         <button type="button" id="sortArrive" aria-pressed="true">By arrival</button>
         <button type="button" id="sortName" aria-pressed="false">By name</button>
@@ -261,6 +282,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     appId: "1:1010364448757:web:c21d9bed632b8f21d62abc"
   };
   const WEDDING = "2027-03-06";
+  const WELCOME = "2027-03-05";  // welcome party, Friday
   const VIEW_START = "2027-02-22", VIEW_END = "2027-03-30";  // last week of Feb through end of March
   const DAY = 864e5;
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -276,6 +298,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
   const isColor = (s) => typeof s === "string" && /^#[0-9a-fA-F]{6}$/.test(s);
   const wedT = toT(WEDDING);
+  const welT = toT(WELCOME);
 
   let parties = [];   // {id, name, color, stops:[{place, start, end}]}
   let loaded = false;
@@ -312,7 +335,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   const now = new Date();
   const daysLeft = Math.round((wedT - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / DAY);
   function updateSub() {
-    const parts = [`Wedding in Thailand on <strong>March 6</strong> <span class="star">★</span>`];
+    const parts = [`Welcome party <strong>March 5</strong> <span class="welcome">✦</span>`, `Wedding <strong>March 6</strong> <span class="star">★</span>`];
     if (daysLeft > 0) parts.push(`<strong>${daysLeft}</strong> days to go`);
     if (loaded && parties.length) parts.push(`<strong>${parties.length}</strong> ${parties.length === 1 ? "party" : "parties"} traveling`);
     $("sub").innerHTML = parts.join(" · ");
@@ -347,6 +370,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
       const dow = new Date(start + i * DAY).getUTCDay();
       if (dow === 0 || dow === 6) { const c = el("div", "we"); c.style.left = i * W + "px"; ov.appendChild(c); }
     }
+    const wl = el("div", "wel"); wl.style.left = Math.round((welT - start) / DAY) * W + "px"; ov.appendChild(wl);
     const wc = el("div", "wed"); wc.style.left = Math.round((wedT - start) / DAY) * W + "px"; ov.appendChild(wc);
     const hl = el("div", "hl"); hl.id = "hl"; hl.hidden = true; ov.appendChild(hl);
     g.appendChild(ov);
@@ -369,9 +393,9 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     }
     const dh = mkRow("days");
     for (let k = 0; k < nDays; k++) {
-      const t = start + k * DAY, d = new Date(t), wed = t === wedT;
-      const c = el("div", wed ? "wed" : null); c.style.left = k * W + "px";
-      c.append(el("i", null, wed ? "★" : DOW[d.getUTCDay()]), el("b", null, String(d.getUTCDate())));
+      const t = start + k * DAY, d = new Date(t), wed = t === wedT, wel = t === welT;
+      const c = el("div", wed ? "wed" : wel ? "wel" : null); c.style.left = k * W + "px";
+      c.append(el("i", null, wed ? "★" : wel ? "✦" : DOW[d.getUTCDay()]), el("b", null, String(d.getUTCDate())));
       dh.tr.appendChild(c);
     }
 
@@ -480,7 +504,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
       if (!byPlace.get(s.place).includes(p)) byPlace.get(s.place).push(p);
     }
     const places = [...byPlace.entries()].sort((a, b) => (/thai/i.test(b[0]) - /thai/i.test(a[0])) || b[1].length - a[1].length);
-    $("hereTitle").textContent = (day === wedT ? "★ Wedding day, " : "") + fmt(day) + ": who's where";
+    $("hereTitle").textContent = (day === wedT ? "★ Wedding day, " : day === welT ? "✦ Welcome party, " : "") + fmt(day) + ": who's where";
     $("hereHint").textContent = places.length ? "Hover or tap another day on the chart to change it." : "Nobody has a stop on this day yet.";
     const box = $("places"); box.innerHTML = "";
     for (const [place, ps] of places) {
