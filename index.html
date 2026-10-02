@@ -89,7 +89,8 @@ button { font: inherit; cursor: pointer; }
 .track { position: relative; flex: 0 0 auto; z-index: 1; }
 
 .months { height: 28px; }
-.months .track > div { position: absolute; top: 0; height: 28px; overflow: hidden; white-space: nowrap; display: flex; align-items: center; padding-left: 6px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; border-left: 1px solid var(--line); }
+.mlab { position: sticky; left: calc(var(--name-w) + 6px); }
+.months .track > div { position: absolute; top: 0; height: 28px; overflow: clip; white-space: nowrap; display: flex; align-items: center; padding-left: 6px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; border-left: 1px solid var(--line); }
 .days { height: 46px; border-bottom: 1px solid var(--line); }
 .days .track > div { position: absolute; top: 0; width: var(--day-w); height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--muted); }
 .days .track > div b { font-size: 13px; color: var(--fg); font-weight: 600; }
@@ -101,7 +102,9 @@ button { font: inherit; cursor: pointer; }
 .welcome { color: var(--welcome); }
 .days .track > div i { font-style: normal; }
 
-.party { height: 40px; margin-top: 8px; }
+.party { height: 48px; padding-top: 8px; }
+.party .name { overflow: visible; }
+.party .chip { max-width: none; overflow: visible; }
 .chip { display: inline-flex; align-items: center; max-width: 100%; padding: 2px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--c) 16%, transparent); color: color-mix(in srgb, var(--c) 78%, var(--fg)); }
 .edit { flex: 0 0 auto; border: 0; background: transparent; color: var(--muted); width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; }
 .edit:hover { background: var(--line-soft); color: var(--fg); }
@@ -386,7 +389,8 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
       const d = new Date(start + i * DAY), mo = d.getUTCMonth();
       let j = i; while (j < nDays && new Date(start + j * DAY).getUTCMonth() === mo) j++;
       const span = j - i;
-      const lab = el("div", null, span >= 3 ? MONTHS[mo] + " " + d.getUTCFullYear() : span === 2 ? MONTHS[mo] : "");
+      const lab = el("div");
+      lab.append(el("span", "mlab", span >= 3 ? MONTHS[mo] + " " + d.getUTCFullYear() : span === 2 ? MONTHS[mo] : ""));
       lab.style.left = i * W + "px"; lab.style.width = (j - i) * W + "px";
       if (i === 0) lab.style.borderLeft = "0";
       m.tr.appendChild(lab); i = j;
