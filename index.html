@@ -151,6 +151,13 @@ button { font: inherit; cursor: pointer; }
 .place h3 span { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
 .place ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 
+.lock { min-height: calc(100vh - 88px); display: grid; place-items: center; }
+.lock form { width: min(400px, 100%); display: flex; flex-direction: column; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px; }
+.lock h1 { font-size: 28px; }
+.lock p { margin: 0; color: var(--muted); }
+.lock .go { display: flex; gap: 8px; }
+.lock .go input { flex: 1; }
+.hdr-actions { display: flex; gap: 6px; align-items: center; }
 .notice { background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 14px 16px; color: var(--muted); }
 
 /* ---------- Modal ---------- */
@@ -205,13 +212,28 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
 </head>
 <body>
 
-<div class="wrap">
+<div class="lock" id="lock">
+  <form id="lockForm" novalidate>
+    <h1>J+S Wedding and Coordinated Travel</h1>
+    <p>Enter the passcode from Jon &amp; Steph to see and add travel plans.</p>
+    <div class="go">
+      <input id="lockCode" type="password" autocomplete="current-password" maxlength="60" placeholder="Passcode" aria-label="Passcode">
+      <button class="btn primary" id="lockGo" type="submit">Enter</button>
+    </div>
+    <p class="err" id="lockErr" role="alert"></p>
+  </form>
+</div>
+
+<div class="wrap" id="app" hidden>
   <header>
     <div>
       <h1>J+S Wedding and Coordinated Travel</h1>
       <p class="sub" id="sub">Wedding in Thailand on <strong>March 6</strong> <span class="star">★</span></p>
     </div>
-    <button class="btn primary" id="addBtn" type="button" disabled>Add your travel</button>
+    <div class="hdr-actions">
+      <button class="btn ghost" id="lockBtn" type="button">Lock</button>
+      <button class="btn primary" id="addBtn" type="button" disabled>Add your travel</button>
+    </div>
   </header>
 
   <div class="notice" id="notice" hidden></div>
@@ -259,11 +281,6 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
       <span class="help">One line per place. Leave dates blank if you haven't decided yet.</span>
       <div class="stops" id="stops"></div>
       <div><button class="btn ghost" type="button" id="addStop">+ Add a stop</button></div>
-    </div>
-    <div class="field">
-      <label for="fCode">Editing passcode</label>
-      <input id="fCode" type="password" autocomplete="off" maxlength="60" placeholder="Ask Jon or Steph">
-      <span class="help">Needed to save or delete. This device remembers it after your first save.</span>
     </div>
     <p class="err" id="fErr"></p>
     <div class="modal-actions">
@@ -619,19 +636,8 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     (p ? p.stops : [{ place: "Thailand", start: "2027-03-05", end: "2027-03-07" }]).forEach(addStopRow);
     $("fErr").textContent = "";
     $("fDelete").hidden = !p; disarm();
-    try { $("fCode").value = localStorage.getItem("editCode") || ""; } catch (_) {}
   }
 
-  // Every write goes in a batch with a writes/{id} record carrying the passcode; the database rules check it.
-  async function guarded(ref, op) {
-    const code = $("fCode").value.trim();
-    if (!code) throw { code: "no-code" };
-    const b = fsdb.batch();
-    b.set(fsdb.collection("writes").doc(ref.id), { code, at: firebase.firestore.FieldValue.serverTimestamp() });
-    op(b);
-    await b.commit();
-    try { localStorage.setItem("editCode", code); } catch (_) {}
-  }
   function closeForm() { $("scrim").hidden = true; editingId = null; }
   function disarm() { deleteArmed = false; $("fDelete").textContent = "Delete"; $("fDelete").classList.remove("confirm"); }
   $("addStop").addEventListener("click", () => addStopRow({}));
@@ -642,8 +648,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
 
   function friendly(err) {
     const c = err && err.code;
-    if (c === "no-code") return "Enter the editing passcode to save changes.";
-    if (c === "permission-denied") return "That passcode isn't right. Ask Jon or Steph for it.";
+    if (c === "permission-denied") return "That change wasn't accepted. If the passcode changed, click Lock and enter the new one.";
     if (c === "unavailable" || c === "deadline-exceeded") return "Couldn't reach the server. Check your connection and try again.";
     return "Couldn't save. Please try again.";
   }
@@ -671,8 +676,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
     $("fSave").disabled = true;
     try {
       const data = { name, color, stops, updatedAt: new Date().toISOString() };
-      const ref = editingId ? col.doc(editingId) : col.doc();
-      await guarded(ref, (b) => b.set(ref, data));
+      if (editingId) await col.doc(editingId).set(data); else await col.add(data);
       closeForm();
     } catch (err) { $("fErr").textContent = friendly(err); }
     finally { $("fSave").disabled = false; }
@@ -680,7 +684,7 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   $("fDelete").addEventListener("click", async () => {
     if (!deleteArmed) { deleteArmed = true; $("fDelete").textContent = "Confirm delete"; $("fDelete").classList.add("confirm"); return; }
     if (!col || !editingId) return;
-    try { const ref = col.doc(editingId); await guarded(ref, (b) => b.delete(ref)); closeForm(); } catch (err) { $("fErr").textContent = friendly(err); disarm(); }
+    try { await col.doc(editingId).delete(); closeForm(); } catch (err) { $("fErr").textContent = friendly(err); disarm(); }
   });
 
   window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 120); });
@@ -693,30 +697,63 @@ input[type="text"], input[type="date"], input[type="password"], select { font: i
   }
   render(); centerWedding();
 
+  // ---------- passcode gate: data lives at sites/{passcode}/parties; the rules only open the right path ----------
   (() => {
-    const fail = (msg) => { loaded = true; const n = $("notice"); n.textContent = msg; n.hidden = false; render(); };
-    if (!window.firebase) return fail("Couldn't load the travel database. Check your connection and reload the page.");
+    let unsub = null;
+    function showLock(msg) {
+      if (unsub) { unsub(); unsub = null; }
+      col = null; parties = []; loaded = false;
+      $("app").hidden = true; $("scrim").hidden = true; $("lock").hidden = false;
+      $("lockErr").textContent = msg || "";
+      $("lockGo").disabled = false;
+      setTimeout(() => $("lockCode").focus(), 0);
+    }
+    if (!window.firebase) return showLock("Couldn't load the travel database. Check your connection and reload the page.");
     firebase.initializeApp(firebaseConfig);
     fsdb = firebase.firestore();
-    col = fsdb.collection("parties");
-    $("addBtn").disabled = false;
-    let first = true;
-    col.onSnapshot((snap) => {
-      parties = snap.docs.map((d) => {
-        const v = d.data() || {};
-        const stops = (Array.isArray(v.stops) ? v.stops : [])
-          .filter((s) => s && typeof s.place === "string" && s.place.trim())
-          .map((s) => {
-            const ok = isDate(s.start) && isDate(s.end) && s.end >= s.start;
-            return { place: s.place.trim().slice(0, 40), start: ok ? s.start : "", end: ok ? s.end : "" };
-          });
-        return { id: d.id, name: typeof v.name === "string" ? v.name.trim().slice(0, 60) : "", color: isColor(v.color) ? v.color : COLORS[8], stops };
-      }).filter((p) => p.name && p.stops.length);
-      loaded = true; render();
-      if (first) { first = false; centerWedding(); }
-    }, (err) => fail(err && err.code === "permission-denied"
-      ? "The travel database isn't accepting requests yet. Jon or Steph need to finish setting it up."
-      : "Couldn't load travel plans. Reload the page to try again."));
+    function connect(code) {
+      if (unsub) unsub();
+      $("lockGo").disabled = true; $("lockErr").textContent = "Checking…";
+      col = fsdb.collection("sites").doc(code).collection("parties");
+      let first = true;
+      unsub = col.onSnapshot((snap) => {
+        parties = snap.docs.map((d) => {
+          const v = d.data() || {};
+          const stops = (Array.isArray(v.stops) ? v.stops : [])
+            .filter((s) => s && typeof s.place === "string" && s.place.trim())
+            .map((s) => {
+              const ok = isDate(s.start) && isDate(s.end) && s.end >= s.start;
+              return { place: s.place.trim().slice(0, 40), start: ok ? s.start : "", end: ok ? s.end : "" };
+            });
+          return { id: d.id, name: typeof v.name === "string" ? v.name.trim().slice(0, 60) : "", color: isColor(v.color) ? v.color : COLORS[8], stops };
+        }).filter((p) => p.name && p.stops.length);
+        loaded = true;
+        if (first) {
+          first = false;
+          try { localStorage.setItem("sitePass", code); } catch (_) {}
+          $("lock").hidden = true; $("app").hidden = false; $("addBtn").disabled = false;
+          render(); centerWedding();
+        } else render();
+      }, (err) => {
+        if (err && err.code === "permission-denied") {
+          try { localStorage.removeItem("sitePass"); } catch (_) {}
+          showLock("That passcode isn't right. Check with Jon or Steph.");
+        } else showLock("Couldn't load travel plans. Check your connection and try again.");
+      });
+    }
+    $("lockForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const code = $("lockCode").value.trim();
+      if (!code) return $("lockErr").textContent = "Enter the passcode.";
+      if (code.includes("/") || code === "." || code === "..") return $("lockErr").textContent = "That passcode isn't right. Check with Jon or Steph.";
+      connect(code);
+    });
+    $("lockBtn").addEventListener("click", () => {
+      try { localStorage.removeItem("sitePass"); } catch (_) {}
+      $("lockCode").value = ""; showLock("");
+    });
+    let saved = null; try { saved = localStorage.getItem("sitePass"); } catch (_) {}
+    if (saved) { $("lockCode").value = saved; connect(saved); } else showLock("");
   })();
 })();
 </script>
